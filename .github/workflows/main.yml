@@ -36,7 +36,7 @@ jobs:
           git add tracker.csv
           git commit -m "Automated trade matrix update" || exit 0
           git push
-      - name: 🏆 Display Top Analyst Signal Report
+            - name: 🏆 Display Top Analyst Signal Report
         run: |
           if [ -f "scorecard.csv" ]; then
             TOP_ANALYST=$(tail -n +2 scorecard.csv | head -n 1 | cut -d',' -f1)
@@ -45,11 +45,34 @@ jobs:
             echo "=================================================="
             if [ -f "tracker.csv" ]; then
               echo "📋 LATEST VALID FINANCIAL RESEARCH FROM THIS ACCOUNT:"
-              grep -i ",$TOP_ANALYST," tracker.csv | tail -n 1 | awk -F',' '{print "• Date: " $3 "\n• Asset: " $5 "\n• Entry: " $6 "\n• Summary Text: " $4}'
-            else
+              python3 -c "
+import csv, sys, html
+with open('tracker.csv', mode='r', encoding='utf-8') as f:
+    reader = csv.reader(f)
+    header = next(reader)
+    # Find positions safely regardless of layout changes
+    idx_acct = header.index('Account') if 'Account' in header else 1
+    idx_date = header.index('Date_Logged') if 'Date_Logged' in header else 2
+    idx_text = header.index('Tweet_Text') if 'Tweet_Text' in header else 3
+    idx_tick = header.index('Ticker') if 'Ticker' in header else 4
+    idx_entr = header.index('Entry_Price') if 'Entry_Price' in header else 5
+    
+    matching_rows = [r for r in reader if len(r) > max(idx_acct, idx_tick) and r[idx_acct].lower() == '$TOP_ANALYST'.lower()]
+    if matching_rows:
+        latest = matching_rows[-1]
+        clean_text = html.unescape(latest[idx_text].replace('\n', ' '))
+        print(f'• Date: {latest[idx_date]}')
+        print(f'• Asset: {latest[idx_tick]}')
+        print(f'• Entry: {latest[idx_entr]}')
+        print(f'• Summary Text: {clean_text}')
+    else:
+        print('No recent signals found for this account.')
+              "
+            else:
               echo "No historical trade logs found in database."
             fi
             echo "=================================================="
           else
             echo "No scorecard data computed yet."
           fi
+
