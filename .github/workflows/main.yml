@@ -36,3 +36,20 @@ jobs:
           git add tracker.csv
           git commit -m "Automated trade matrix update" || exit 0
           git push
+      - name: 🏆 Display Top Analyst Signal Report
+        run: |
+          if [ -f "scorecard.csv" ]; then
+            TOP_ANALYST=$(tail -n +2 scorecard.csv | head -n 1 | cut -d',' -f1)
+            echo "=================================================="
+            echo "🔥 CURRENT LEADERBOARD WIN-RATE CHAMPION: @$TOP_ANALYST"
+            echo "=================================================="
+            if [ -f "tracker.csv" ]; then
+              echo "📋 LATEST VALID FINANCIAL RESEARCH FROM THIS ACCOUNT:"
+              grep -i ",$TOP_ANALYST," tracker.csv | tail -n 1 | awk -F',' '{print "• Date: " $3 "\n• Asset: " $5 "\n• Entry: " $6 "\n• Summary Text: " $4}'
+            else
+              echo "No historical trade logs found in database."
+            fi
+            echo "=================================================="
+          else
+            echo "No scorecard data computed yet."
+          fi
