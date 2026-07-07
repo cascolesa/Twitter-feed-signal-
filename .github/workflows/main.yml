@@ -36,7 +36,9 @@ jobs:
           git add tracker.csv
           git commit -m "Automated trade matrix update" || exit 0
           git push
-            - name: 🏆 Display Top Analyst Signal Report
+      - name: 🏆 Display Top Analyst Signal Report
+        env:
+          TARGET_ANALYST: ${{ env.TOP_ANALYST }} # Safely maps variable away from raw line insertion
         run: |
           if [ -f "scorecard.csv" ]; then
             TOP_ANALYST=$(tail -n +2 scorecard.csv | head -n 1 | cut -d',' -f1)
@@ -45,26 +47,35 @@ jobs:
             echo "=================================================="
             if [ -f "tracker.csv" ]; then
               echo "📋 LATEST VALID FINANCIAL RESEARCH FROM THIS ACCOUNT:"
+              export TOP_ANALYST
               python3 -c "
-import csv, sys, html
+import csv, os, html
+target = os.getenv('TOP_ANALYST', '').lower()
 with open('tracker.csv', mode='r', encoding='utf-8') as f:
     reader = csv.reader(f)
-    header = next(reader)
-    # Find positions safely regardless of layout changes
+    try:
+        header = next(reader)
+    except StopIteration:
+        sys.exit(0)
+    
     idx_acct = header.index('Account') if 'Account' in header else 1
     idx_date = header.index('Date_Logged') if 'Date_Logged' in header else 2
     idx_text = header.index('Tweet_Text') if 'Tweet_Text' in header else 3
     idx_tick = header.index('Ticker') if 'Ticker' in header else 4
     idx_entr = header.index('Entry_Price') if 'Entry_Price' in header else 5
     
-    matching_rows = [r for r in reader if len(r) > max(idx_acct, idx_tick) and r[idx_acct].lower() == '$TOP_ANALYST'.lower()]
+    matching_rows = []
+    for r in reader:
+        if len(r) > max(idx_acct, idx_tick) and r[idx_acct].lower() == target:
+            matching_rows.append(r)
+            
     if matching_rows:
         latest = matching_rows[-1]
         clean_text = html.unescape(latest[idx_text].replace('\n', ' '))
-        print(f'• Date: {latest[idx_date]}')
-        print(f'• Asset: {latest[idx_tick]}')
-        print(f'• Entry: {latest[idx_entr]}')
-        print(f'• Summary Text: {clean_text}')
+        print('• Date:', latest[idx_date])
+        print('• Asset:', latest[idx_tick])
+        print('• Entry:', latest[idx_entr])
+        print('• Summary Text:', clean_text)
     else:
         print('No recent signals found for this account.')
               "
@@ -75,4 +86,3 @@ with open('tracker.csv', mode='r', encoding='utf-8') as f:
           else
             echo "No scorecard data computed yet."
           fi
-
