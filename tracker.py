@@ -60,7 +60,6 @@ FUNDAMENTAL_KEYWORDS = [
 
 def is_fundamentally_valid(text):
     clean_text = text.lower()
-    # Verified Fix: Uses strict word boundaries so strings don't match partially
     for keyword in FUNDAMENTAL_KEYWORDS:
         if re.search(r'\b' + re.escape(keyword) + r'\b', clean_text):
             return True
@@ -76,11 +75,10 @@ def parse_asset_ticker(text):
         return match.group(1)
     words = re.findall(r'\b[A-Z]{3,5}\b', text)
     for word in words:
-        # Verified Fix: Added news headlines, video tags, and regional entities to the exclusion array
         if word not in [
             "AND", "THE", "FOR", "NOW", "FED", "CPI", "USA", "GDP", "THEY", "WITH", 
             "THAT", "THIS", "WATCH", "BREAKING", "NEWS", "ALERT", "LIVE", "VIDEO", 
-            "UAE", "RSF", "INFO", "POST"
+            "UAE", "RSF", "INFO", "POST", "NATO", "EURO", "DROP", "MOM", "YOY", "QOQ"
         ]:
             return word
     return None
@@ -102,11 +100,18 @@ def process_and_score_metrics():
             return
             
         for row in reader:
-            if not row: continue
-            tweet_id, account, date_str, text, ticker, entry_p, current_p, perf, status = row
+            if not row or len(row) < 9: continue
+            tweet_id, account, date_str, text, ticker, entry_p, current_p, perf, status = row[:9]
             
-            entry_date = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
-            days_elapsed = (now - entry_date).days
+            # Runtime cleanup: Drop historical bad entries dynamically
+            if ticker in ["NATO", "DROP", "EURUSD=X"] and account == "clashreport":
+                continue
+                
+            try:
+                entry_date = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+                days_elapsed = (now - entry_date).days
+            except ValueError:
+                continue
             
             if status == "OPEN":
                 try:
@@ -162,7 +167,8 @@ def process_and_score_metrics():
             account, stats["total"], stats["wins"], stats["losses"], stats["open"], f"{win_rate}%", flag
         ])
         
-    data_rows.sort(key=lambda x: float(x[5].replace('%', '')), reverse=True)
+    if data_rows:
+        data_rows.sort(key=lambda x: float(x[5].replace('%', '')), reverse=True)
     
     with open(SCORECARD_FILE, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
@@ -172,8 +178,7 @@ def process_and_score_metrics():
 
 async def main():
     print("Initializing tracker data audits & analytics...")
-    process_and_score_metrics()
-
+    
     if not AUTH_TOKEN or not CT0:
         print("CRITICAL ERROR: Missing token environment secrets.")
         return
@@ -181,7 +186,6 @@ async def main():
     client.set_cookies({'auth_token': AUTH_TOKEN, 'ct0': CT0})
 
     try:
-        print(f"Connecting to X API to pull list ID: {LIST_ID}")
         tweets = await client.get_list_tweets(LIST_ID, count=50)
     except Exception as e:
         print(f"CRITICAL ERROR: Failed pulling list feed: {e}")
@@ -200,7 +204,7 @@ async def main():
     
     new_rows = []
     for tweet in tweets:
-        if tweet.id in existing_ids:
+        if tweet.id in existing_ids or str(tweet.id) in existing_ids:
             continue
             
         text = tweet.text
@@ -208,7 +212,7 @@ async def main():
             continue
             
         ticker = parse_asset_ticker(text)
-        if not ticker:
+        if not ticker or ticker in ["NATO", "EURO", "DROP"]:
             continue
             
         entry_price = "0.0"
@@ -220,6 +224,9 @@ async def main():
         except Exception:
             pass
 
+        if entry_price == "0.0" or entry_price == "0":
+            continue
+
         new_rows.append([tweet.id, tweet.user.screen_name, now_str, text, ticker, entry_price, entry_price, "0.0%", "OPEN"])
 
     if new_rows:
@@ -229,9 +236,8 @@ async def main():
             if not file_exists:
                 writer.writerow(["Tweet_ID", "Account", "Date_Logged", "Tweet_Text", "Ticker", "Entry_Price", "Current_Price", "Performance", "Status"])
             writer.writerows(new_rows)
-        print(f"Successfully processed and logged {len(new_rows)} new financial signals.")
-    else:
-        print("No new valid financial signals found in this execution window.")
+            
+    process_and_score_metrics()
 
 if __name__ == "__main__":
     asyncio.run(main())
