@@ -38,4 +38,4 @@ jobs:
           git push
 
       - name: Display Top Analyst Signal Report
-        run: python report.py
+        run: python Report.py
