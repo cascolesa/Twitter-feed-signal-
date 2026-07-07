@@ -202,8 +202,15 @@ async def main():
         print(f"CRITICAL ERROR: Failed pulling list feed: {e}")
         return
 
-    existing_ids = set()
-    with open(CSV_FILE, mode='r', encoding='utf-8') as f:
+        existing_ids = set()
+    if os.path.exists(CSV_FILE):
+        with open(CSV_FILE, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for row in reader:
+                if row and len(row) > 0:
+                    existing_ids.add(row[0])
+
         reader = csv.reader(f)
         next(reader, None)
         for row in reader:
