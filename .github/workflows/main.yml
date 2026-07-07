@@ -21,7 +21,7 @@ jobs:
 
       - name: Install Libraries
         run: |
-          pip install yfinance
+          pip install yfinance twifork
 
       - name: Run Tracker Engine
         env:
