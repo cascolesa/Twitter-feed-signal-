@@ -7,7 +7,7 @@ on:
 
 jobs:
   run-tracker:
-    runs-runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
@@ -20,7 +20,8 @@ jobs:
           python-version: '3.10'
 
       - name: Install Libraries
-        run: pip install git+https://github.com
+        run: |
+          pip install yfinance
 
       - name: Run Tracker Engine
         env:
