@@ -55,11 +55,16 @@ FUNDAMENTAL_KEYWORDS = [
     "stagflation", "deflation", "velocity", "soft landing", "hard landing",
     "unemployment", "payrolls", "nfp", "wages", "labor market", "consumer spending",
     "retail sales", "housing starts", "consumer confidence", "debt", "deficit",
-    "inventory", "supply chain", "opec", "production capacity", "shale", "deficit", "surplus"
+    "inventory", "supply chain", "opec", "production capacity", "shale", "surplus"
 ]
 
 def is_fundamentally_valid(text):
-    return any(keyword in text.lower() for keyword in FUNDAMENTAL_KEYWORDS)
+    clean_text = text.lower()
+    # Verified Fix: Uses strict word boundaries so strings don't match partially
+    for keyword in FUNDAMENTAL_KEYWORDS:
+        if re.search(r'\b' + re.escape(keyword) + r'\b', clean_text):
+            return True
+    return False
 
 def parse_asset_ticker(text):
     clean_text = text.lower()
@@ -71,7 +76,12 @@ def parse_asset_ticker(text):
         return match.group(1)
     words = re.findall(r'\b[A-Z]{3,5}\b', text)
     for word in words:
-        if word not in ["AND", "THE", "FOR", "NOW", "FED", "CPI", "USA", "GDP", "THEY", "WITH", "THAT", "THIS"]:
+        # Verified Fix: Added news headlines, video tags, and regional entities to the exclusion array
+        if word not in [
+            "AND", "THE", "FOR", "NOW", "FED", "CPI", "USA", "GDP", "THEY", "WITH", 
+            "THAT", "THIS", "WATCH", "BREAKING", "NEWS", "ALERT", "LIVE", "VIDEO", 
+            "UAE", "RSF", "INFO", "POST"
+        ]:
             return word
     return None
 
@@ -187,7 +197,6 @@ async def main():
                     existing_ids.add(row[0])
 
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    file_exists = os.path.isfile(CSV_FILE)
     
     new_rows = []
     for tweet in tweets:
@@ -210,17 +219,19 @@ async def main():
                 entry_price = str(round(hist['Close'].iloc[-1], 2))
         except Exception:
             pass
-            
-        account_handle = tweet.user.screen_name
-        new_rows.append([tweet.id, account_handle, now_str, text.replace('\n', ' '), ticker, entry_price, entry_price, "0.0%", "OPEN"])
-        print(f"Successfully recorded new signal from @{account_handle} for ticker {ticker}")
+
+        new_rows.append([tweet.id, tweet.user.screen_name, now_str, text, ticker, entry_price, entry_price, "0.0%", "OPEN"])
 
     if new_rows:
+        file_exists = os.path.isfile(CSV_FILE)
         with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["Tweet_ID", "Account", "Date", "Text", "Ticker", "Entry_Price", "Current_Price", "Performance", "Status"])
+                writer.writerow(["Tweet_ID", "Account", "Date_Logged", "Tweet_Text", "Ticker", "Entry_Price", "Current_Price", "Performance", "Status"])
             writer.writerows(new_rows)
+        print(f"Successfully processed and logged {len(new_rows)} new financial signals.")
+    else:
+        print("No new valid financial signals found in this execution window.")
 
 if __name__ == "__main__":
     asyncio.run(main())
