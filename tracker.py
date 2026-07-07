@@ -6,54 +6,39 @@ import datetime
 import yfinance as yf
 from twikit import Client
 
-# CONFIGURATION
 LIST_ID = "2074473804835729447"  
 CSV_FILE = "tracker.csv"
 SCORECARD_FILE = "scorecard.csv"
-HOLDING_PERIOD_DAYS = 90  # Strict 1-quarter fundamental evaluation window
+HOLDING_PERIOD_DAYS = 90  
 
 AUTH_TOKEN = os.getenv("X_AUTH_TOKEN")
 CT0 = os.getenv("X_CT0")
 
 client = Client(
     language="en-US",
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
 
-# ALL-INCLUSIVE MASTER DICTIONARY: Maps global assets to Yahoo Finance symbols
 MACRO_MAP = {
-    # --- Major Global Indices ---
     "s&p 500": "^GSPC", "s&p": "^GSPC", "spy": "SPY",
     "nasdaq": "^IXIC", "nasdaq 100": "^NDX", "qqq": "QQQ",
     "dow jones": "^DJI", "dow": "^DJI", "dia": "DIA",
     "russell 2000": "^RUT", "iwm": "IWM",
     "vix": "^VIX", "volatility index": "^VIX",
     "ftse": "^FTSE", "dax": "^GDAXI", "nikkei": "^N225",
-    
-    # --- Fixed Income & Bonds (Yields) ---
     "10y yield": "^TNX", "10-year treasury": "^TNX", "10y treasury": "^TNX", "bonds": "^TNX",
     "2y yield": "^IRX", "2-year treasury": "^IRX", "2y treasury": "^IRX",
     "30y yield": "^TYX", "30-year treasury": "^TYX", "30y treasury": "^TYX",
-    
-    # --- Top Cryptocurrencies ---
     "bitcoin": "BTC-USD", "btc": "BTC-USD",
     "ethereum": "ETH-USD", "eth": "ETH-USD",
     "solana": "SOL-USD", "sol": "SOL-USD",
     "binance coin": "BNB-USD", "bnb": "BNB-USD",
     "ripple": "XRP-USD", "xrp": "XRP-USD",
     "cardano": "ADA-USD", "ada": "ADA-USD",
-    
-    # --- Energy ---
     "crude oil": "CL=F", "crude": "CL=F", "wti": "CL=F", "brent": "BZ=F",
     "natural gas": "NG=F", "natgas": "NG=F", "gasoline": "RB=F",
-    
-    # --- Precious & Industrial Metals ---
     "gold": "GC=F", "silver": "SI=F", "copper": "HG=F", "platinum": "PL=F",
-    
-    # --- Agriculture ---
     "corn": "ZC=F", "wheat": "ZW=F", "soybeans": "ZS=F", "coffee": "KC=F",
-    
-    # --- Major Currencies ---
     "dollar index": "DX-Y.NYB", "dxy": "DX-Y.NYB",
     "swiss franc": "CHFUSD=X", "chf": "CHFUSD=X",
     "euro": "EURUSD=X", "eur": "EURUSD=X",
@@ -61,32 +46,20 @@ MACRO_MAP = {
     "yen": "JPYUSD=X", "jpy": "JPYUSD=X"
 }
 
-# STEP A: BROAD STRUCTURAL METRIC VOCABULARY
 FUNDAMENTAL_KEYWORDS = [
-    # Earnings & Corporate Health
     "eps", "earnings", "yoy", "qoq", "margin", "revenue", "valuation", "pe ratio", 
     "balance sheet", "guidance", "free cash flow", "ebitda", "p/e", "capex", "net income",
-    
-    # Monetary Policy & Central Banks
     "fed", "rate cut", "hike", "fomc", "hawkish", "dovish", "interest rates", 
     "liquidity", "quantitative easing", "qe", "qt", "ecb", "boj", "central bank",
-    
-    # Macro Indicators
     "inflation", "cpi", "yield curve", "macro", "recession", "gdp", "pmi", "pce", 
     "stagflation", "deflation", "velocity", "soft landing", "hard landing",
-    
-    # Labor & Economic Health
     "unemployment", "payrolls", "nfp", "wages", "labor market", "consumer spending",
     "retail sales", "housing starts", "consumer confidence", "debt", "deficit",
-    
-    # Commodity & Supply Mechanics
     "inventory", "supply chain", "opec", "production capacity", "shale", "deficit", "surplus"
 ]
 
 def is_fundamentally_valid(text):
-    """Verifies the text matches at least one broad macro or corporate structural variable."""
-    clean_text = text.lower()
-    return any(keyword in clean_text for keyword in FUNDAMENTAL_KEYWORDS)
+    return any(keyword in text.lower() for keyword in FUNDAMENTAL_KEYWORDS)
 
 def parse_asset_ticker(text):
     clean_text = text.lower()
@@ -132,8 +105,12 @@ def process_and_score_metrics():
                     live_price = round(live_price, 2)
                     entry_p_float = float(entry_p)
                     
-                    current_perf = round(((live_price - entry_p_float) / entry_p_float) * 100, 2)
-                    perf = f"{current_perf}%"
+                    if entry_p_float > 0:
+                        current_perf = round(((live_price - entry_p_float) / entry_p_float) * 100, 2)
+                        perf = f"{current_perf}%"
+                    else:
+                        current_perf = 0.0
+                        perf = "0.0%"
                     current_p = str(live_price)
                     
                     if days_elapsed >= HOLDING_PERIOD_DAYS:
@@ -158,7 +135,6 @@ def process_and_score_metrics():
         writer = csv.writer(f)
         writer.writerows(rows)
 
-    # STEP C EXECUTION: Build and rank the Analyst Scorecard file safely
     header_row = ["Analyst_Handle", "Total_Forecasts", "Matured_Wins", "Matured_Losses", "Active_Open", "Win_Rate_%", "Status_Flag"]
     data_rows = []
     
@@ -176,7 +152,6 @@ def process_and_score_metrics():
             account, stats["total"], stats["wins"], stats["losses"], stats["open"], f"{win_rate}%", flag
         ])
         
-    # Corrected row-indexing syntax map sorting filter
     data_rows.sort(key=lambda x: float(x[5].replace('%', '')), reverse=True)
     
     with open(SCORECARD_FILE, mode='w', newline='', encoding='utf-8') as f:
@@ -202,7 +177,7 @@ async def main():
         print(f"CRITICAL ERROR: Failed pulling list feed: {e}")
         return
 
-            existing_ids = set()
+    existing_ids = set()
     if os.path.exists(CSV_FILE):
         with open(CSV_FILE, mode='r', encoding='utf-8') as f:
             reader = csv.reader(f)
@@ -211,53 +186,41 @@ async def main():
                 if row and len(row) > 0:
                     existing_ids.add(row[0])
 
-
-        reader = csv.reader(f)
-        next(reader, None)
-        for row in reader:
-            if row: existing_ids.add(row)
-
-    new_trades_count = 0
-    print(f"Found {len(tweets)} recent tweets. Filtering for broad structural metric vocabulary...")
-
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    file_exists = os.path.isfile(CSV_FILE)
+    
+    new_rows = []
     for tweet in tweets:
         if tweet.id in existing_ids:
             continue
             
-        if not is_fundamentally_valid(tweet.text):
-            print(f"Skipped tweet ID {tweet.id}: Fails quality check (No structural metric vocabulary found).")
+        text = tweet.text
+        if not is_fundamentally_valid(text):
             continue
             
-        ticker = parse_asset_ticker(tweet.text)
-        if ticker:
-            try:
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period="1d")
-                if hist.empty:
-                    continue
-                entry_price = hist['Close'].iloc[-1]
-                entry_price = round(entry_price, 2)
-                account_handle = tweet.user.screen_name
-                
-                with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as f:
-                    writer = csv.writer(f)
-                    writer.writerow([
-                        tweet.id,
-                        account_handle,
-                        datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), 
-                        tweet.text.replace("\n", " "), 
-                        ticker, 
-                        entry_price, 
-                        entry_price, 
-                        "0.0%", 
-                        "OPEN"
-                    ])
-                new_trades_count += 1
-                print(f"SUCCESS: Logged high-quality fundamental thesis on {ticker} from @{account_handle}")
-            except Exception:
-                pass
+        ticker = parse_asset_ticker(text)
+        if not ticker:
+            continue
+            
+        entry_price = "0.0"
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="1d")
+            if not hist.empty:
+                entry_price = str(round(hist['Close'].iloc[-1], 2))
+        except Exception:
+            pass
+            
+        account_handle = tweet.user.screen_name
+        new_rows.append([tweet.id, account_handle, now_str, text.replace('\n', ' '), ticker, entry_price, entry_price, "0.0%", "OPEN"])
+        print(f"Successfully recorded new signal from @{account_handle} for ticker {ticker}")
 
-    print(f"Run finished completely. Appended {new_trades_count} valid structural posts.")
+    if new_rows:
+        with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["Tweet_ID", "Account", "Date", "Text", "Ticker", "Entry_Price", "Current_Price", "Performance", "Status"])
+            writer.writerows(new_rows)
 
 if __name__ == "__main__":
     asyncio.run(main())
