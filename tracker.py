@@ -13,7 +13,11 @@ CSV_FILE = "tracker.csv"
 AUTH_TOKEN = os.getenv("X_AUTH_TOKEN")
 CT0 = os.getenv("X_CT0")
 
-client = Client("en-US")
+client = Client(
+    language="en-US",
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
+
 
 def parse_ticker(text):
     match = re.search(r'\$([A-Z]{1,5})', text)
