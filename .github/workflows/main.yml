@@ -20,7 +20,8 @@ jobs:
           python-version: '3.10' # Explicitly locks the runtime environment to fix the missing PATH warning
 
       - name: Install Libraries
-        run: pip install twifork yfinance
+        run: pip install git+https://github.com/unclecode/twikit.git yfinance
+
 
       - name: Run Script
         env:
