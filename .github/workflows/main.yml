@@ -12,16 +12,15 @@ jobs:
       contents: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6 # Updated to v6 to fully clear Node 24 runtime warnings
+        uses: actions/checkout@v6
 
       - name: Set Up Python
-        uses: actions/setup-python@v6 # Updated to v6 for full native Node 24 support
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.10' # Explicitly locks the runtime environment to fix the missing PATH warning
+          python-version: '3.10'
 
       - name: Install Libraries
-        run: pip install git+https://github.com/unclecode/twikit.git yfinance
-
+        run: pip install git+https://github.com yfinance
 
       - name: Run Script
         env:
@@ -33,12 +32,11 @@ jobs:
         run: |
           git config --global user.name "Cloud Automation Engine"
           git config --global user.email "actions@github.com"
-          git add tracker.csv
+          git add tracker.csv scorecard.csv
           git commit -m "Automated trade matrix update" || exit 0
           git push
+
       - name: 🏆 Display Top Analyst Signal Report
-        env:
-          TARGET_ANALYST: ${{ env.TOP_ANALYST }} # Safely maps variable away from raw line insertion
         run: |
           if [ -f "scorecard.csv" ]; then
             TOP_ANALYST=$(tail -n +2 scorecard.csv | head -n 1 | cut -d',' -f1)
@@ -49,7 +47,7 @@ jobs:
               echo "📋 LATEST VALID FINANCIAL RESEARCH FROM THIS ACCOUNT:"
               export TOP_ANALYST
               python3 -c "
-import csv, os, html
+import csv, os, html, sys
 target = os.getenv('TOP_ANALYST', '').lower()
 with open('tracker.csv', mode='r', encoding='utf-8') as f:
     reader = csv.reader(f)
@@ -58,6 +56,7 @@ with open('tracker.csv', mode='r', encoding='utf-8') as f:
     except StopIteration:
         sys.exit(0)
     
+    # Map headers to handles dynamically
     idx_acct = header.index('Account') if 'Account' in header else 1
     idx_date = header.index('Date_Logged') if 'Date_Logged' in header else 2
     idx_text = header.index('Tweet_Text') if 'Tweet_Text' in header else 3
@@ -72,10 +71,10 @@ with open('tracker.csv', mode='r', encoding='utf-8') as f:
     if matching_rows:
         latest = matching_rows[-1]
         clean_text = html.unescape(latest[idx_text].replace('\n', ' '))
-        print('• Date:', latest[idx_date])
-        print('• Asset:', latest[idx_tick])
-        print('• Entry:', latest[idx_entr])
-        print('• Summary Text:', clean_text)
+        print(f'• Date: {latest[idx_date]}')
+        print(f'• Asset: {latest[idx_tick]}')
+        print(f'• Entry: {latest[idx_entr]}')
+        print(f'• Summary Text: {clean_text}')
     else:
         print('No recent signals found for this account.')
               "
