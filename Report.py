@@ -1,27 +1,12 @@
 import csv
-import os
 import requests
 
 def send_telegram_alert():
-    # 1. Pull the exact keys exposed by main.yml
-    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    # Hardcoding your verified working credentials directly to eliminate secret-parsing bugs
+    bot_token = "8827323413:AAHMJWvAvXvrlVGESkHmY-TLhfvFacy3AsI"
+    chat_id = "1941531363"
     
-    # 2. Strict validation to isolate exact environment failures
-    if not bot_token:
-        print("❌ CRITICAL SCRIPT ERROR: 'TELEGRAM_BOT_TOKEN' environment key returned Empty/None.")
-        return
-        
-    if not chat_id:
-        print("❌ CRITICAL SCRIPT ERROR: 'TELEGRAM_CHAT_ID' environment key returned Empty/None.")
-        return
-
-    # Stripping hidden carriage returns or whitespace that might break parsing
-    bot_token = str(bot_token).strip()
-    chat_id = str(chat_id).strip()
-
-    # 3. Explicitly hardcode the exact, unalterable API URL format
-    # Notice the presence of api. and /bot explicitly structured.
+    # Absolute, unalterable base URL string structure
     api_url = f"https://telegram.org{bot_token}/sendMessage"
     
     alert_lines = ["🚨 **X List Signal Report** 🚨\n"]
@@ -45,16 +30,13 @@ def send_telegram_alert():
         }
         
         try:
-            print(f"📡 Initiating transmission handshake sequence...")
+            print(f"📡 Initiating direct transmission handshake sequence to api.telegram.org...")
             response = requests.post(api_url, json=payload, timeout=12)
             response.raise_for_status()
             print(f"🚀 SUCCESS: Message block delivered. Server Response Status: {response.status_code}")
         except requests.exceptions.RequestException as e:
-            # Force the step to explicitly fail if the network packet drops
             print(f"❌ TRANSMISSION FAILED: {e}")
-            if 'response' in locals() and response is not None:
-                print(f"ℹ️ Core Telegram Output: {response.text}")
-            raise SystemExit("Pipeline stopped: Handshake validation failure encountered.")
+            raise SystemExit("Pipeline stopped: Network handshake validation failure.")
 
 if __name__ == "__main__":
     send_telegram_alert()
