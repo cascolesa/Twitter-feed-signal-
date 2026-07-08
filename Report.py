@@ -1,8 +1,6 @@
 import os
 import csv
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import requests
 
 def aggregate_scores(file_path="scorecard.csv"):
     """Groups historical sentiment values by asset category to find the net tone."""
@@ -14,8 +12,8 @@ def aggregate_scores(file_path="scorecard.csv"):
             if cat in summary: summary[cat].append(float(row.get("score", 0)))
     return summary
 
-def construct_and_send_email():
-    """Generates the macro text layout and delivers it via Yahoo SMTP."""
+def construct_and_send_telegram():
+    """Generates the macro text layout and delivers it directly to your Telegram."""
     data = aggregate_scores()
     body = "=== AUTOMATED GLOBAL MACRO REPORT ===\n\n"
     
@@ -24,25 +22,22 @@ def construct_and_send_email():
         bias = "BULLISH BIAS" if avg > 0.15 else ("BEARISH BIAS" if avg < -0.15 else "NEUTRAL RANGE")
         body += f"[{asset.upper()}]\n - Sentiment Index: {avg:.2f}\n - Forward Outlook: {bias}\n - History Samples: {len(scores)}\n\n"
 
-    # Securely retrieve Yahoo system environment login secrets from GitHub
-    sender = os.environ.get("SENDER_EMAIL", "your_account@yahoo.com")
-    password = os.environ.get("SENDER_PASSWORD", "yahoo_app_password")
+    # Securely retrieve system environment keys from GitHub
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     
-    msg = MIMEMultipart()
-    msg['From'], msg['To'] = sender, "cascolesa@yahoo.com"
-    msg['Subject'] = "Global Macro Narrative Update Report"
-    msg.attach(MIMEText(body, 'plain'))
+    if not bot_token or not chat_id:
+        print(f"Configuration missing. Fallback Report View:\n{body}")
+        return
+
+    url = f"https://telegram.org{bot_token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": body}
     
-    try:
-        # Connect to specialized Yahoo outbound mail servers over TLS
-        server = smtplib.SMTP("smtp.mail.yahoo.com", 587)
-        server.starttls()
-        server.login(sender, password)
-        server.sendmail(sender, msg['To'], msg.as_string())
-        server.quit()
-        print("Macro brief successfully mailed out via Yahoo Server.")
-    except Exception as e:
-        print(f"Mail failed to route: {e}\n\nFallback Report View:\n{body}")
+    response = requests.post(url, json=payload)
+    if response.status_code == 200:
+        print("Macro brief successfully delivered to Telegram!")
+    else:
+        print(f"Transmission failed: {response.text}")
 
 if __name__ == "__main__":
-    construct_and_send_email()
+    construct_and_send_telegram()
