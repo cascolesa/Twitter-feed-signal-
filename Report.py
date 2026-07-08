@@ -7,7 +7,7 @@ def send_telegram_alert():
     chat_id = "1941531363"
     
     # Target Endpoint
-    api_url = f"https://telegram.org{bot_token}/sendMessage"
+    api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     
     alert_lines = ["🚨 **X List Signal Report** 🚨\n"]
     
