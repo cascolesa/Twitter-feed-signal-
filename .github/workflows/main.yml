@@ -23,26 +23,13 @@ jobs:
         run: |
           pip install yfinance twifork
 
-      - name: Inspect Tracker Targets and Handles
+      - name: Extract Processing Code
         run: |
-          echo "=== Searching for Account Targets inside tracker.py ==="
-          grep -n -E "user|target|account|list|handle|array|\[" tracker.py | head -n 40
-          echo "=== Checking Script Footer ==="
-          tail -n 20 tracker.py
+          echo "=== Code Loop lines 175-245 ==="
+          sed -n '175,245p' tracker.py
 
       - name: Run Tracker Engine
         env:
           X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
           X_CT0: ${{ secrets.X_CT0 }}
         run: python tracker.py
-
-      - name: Save Tracking Changes
-        run: |
-          git config --global user.name "Cloud Automation Engine"
-          git config --global user.email "actions@github.com"
-          git add tracker.csv scorecard.csv
-          git commit -m "Automated trade matrix update" || exit 0
-          git push
-
-      - name: Display Top Analyst Signal Report
-        run: python Report.py
