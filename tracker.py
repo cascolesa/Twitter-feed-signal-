@@ -5,7 +5,8 @@ import re
 def route_and_filter_data(input_csv="tracker.csv", output_csv="scorecard.csv"):
     if not os.path.exists(input_csv):
         with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
-            csv.DictWriter(f, fieldnames=["Analyst_Handle", "Total_Forecasts", "Active_Open", "Win_Rate_%", "Status_Flag"]).writeheader()
+            # Added Asset_Class column to header structure
+            csv.DictWriter(f, fieldnames=["Analyst_Handle", "Asset_Class", "Total_Forecasts", "Active_Open", "Win_Rate_%", "Status_Flag"]).writeheader()
         return
 
     macro_routes = {
@@ -15,6 +16,7 @@ def route_and_filter_data(input_csv="tracker.csv", output_csv="scorecard.csv"):
         "stocks_and_indices": ["spy", "spx", "ndx", "stocks", "earnings", "nasdaq", "vix", "equities", "s&p", "russell"]
     }
     
+    # Tracking dictionary grouped by (analyst, category) combo
     analyst_metrics = {}
 
     with open(input_csv, mode="r", encoding="utf-8") as f:
@@ -23,7 +25,6 @@ def route_and_filter_data(input_csv="tracker.csv", output_csv="scorecard.csv"):
             tweet_text = row.get("Tweet_Text", "") or ""
             raw_username = row.get("Account", "").strip() or "Unknown_Analyst"
             
-            # Cleans common nested retweets/slang: "RT @KoyfinCharts" -> "KoyfinCharts"
             cleaned_username = re.sub(r'^(RT\s+)?@', '', raw_username).strip()
             cleaned_text = tweet_text.replace("&amp;", "&").lower()
             
@@ -33,20 +34,23 @@ def route_and_filter_data(input_csv="tracker.csv", output_csv="scorecard.csv"):
                     assigned_category = category
                     break
             
-            # Catch-all: If it doesn't match a route, keep it anyway
             if assigned_category == "unclassified":
                 assigned_category = "macro_unclassified"
                 
-            if cleaned_username not in analyst_metrics:
-                analyst_metrics[cleaned_username] = {"Total_Forecasts": 0, "Active_Open": 0}
+            # Group keys by both username AND their asset class
+            metric_key = (cleaned_username, assigned_category)
+                
+            if metric_key not in analyst_metrics:
+                analyst_metrics[metric_key] = {"Total_Forecasts": 0, "Active_Open": 0}
             
-            analyst_metrics[cleaned_username]["Total_Forecasts"] += 1
-            analyst_metrics[cleaned_username]["Active_Open"] += 1
+            analyst_metrics[metric_key]["Total_Forecasts"] += 1
+            analyst_metrics[metric_key]["Active_Open"] += 1
 
     processed_rows = []
-    for username, data in analyst_metrics.items():
+    for (username, category), data in analyst_metrics.items():
         processed_rows.append({
             "Analyst_Handle": username,
+            "Asset_Class": category.upper(),  # Saves fundamental context flag
             "Total_Forecasts": str(data["Total_Forecasts"]),
             "Active_Open": str(data["Active_Open"]),
             "Win_Rate_%": "0.0%",
@@ -54,7 +58,8 @@ def route_and_filter_data(input_csv="tracker.csv", output_csv="scorecard.csv"):
         })
 
     with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Analyst_Handle", "Total_Forecasts", "Active_Open", "Win_Rate_%", "Status_Flag"])
+        # File headers updated to match data generation metrics
+        writer = csv.DictWriter(f, fieldnames=["Analyst_Handle", "Asset_Class", "Total_Forecasts", "Active_Open", "Win_Rate_%", "Status_Flag"])
         writer.writeheader()
         writer.writerows(processed_rows)
 
