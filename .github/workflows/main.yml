@@ -23,6 +23,15 @@ jobs:
         run: |
           pip install yfinance twifork
 
+      - name: Inspect Tracker Source and Data State
+        run: |
+          echo "=== Checking tracker.py Content ==="
+          cat tracker.py
+          echo "=== Checking Target Variables and CSV State ==="
+          ls -la
+          head -n 5 tracker.csv || echo "tracker.csv not found"
+          head -n 5 scorecard.csv || echo "scorecard.csv not found"
+
       - name: Run Tracker Engine
         env:
           X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
