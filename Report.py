@@ -10,7 +10,7 @@ def send_telegram_alert():
     # Credentials
     bot_token = "8827323413:AAHMJWvAvXvrlVGESkHmY-TLhfvFacy3AsI"
     chat_id = "1941531363"
-    api_url = f"https://telegram.org{bot_token}/sendMessage"
+    api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     
     alert_lines = ["<b>🚨 X List Signal Report 🚨</b>\n"]
     row_counter = 0
