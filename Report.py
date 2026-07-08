@@ -1,33 +1,41 @@
-import os
 import csv
 import requests
 
-def aggregate_scores(file_path="scorecard.csv"):
-    """Groups historical sentiment values by asset category to find the net tone."""
-    summary = {"forex": [], "commodities": [], "crypto": [], "stocks_and_indices": []}
-    if not os.path.exists(file_path): return summary
-    with open(file_path, mode="r", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            cat = row.get("category")
-            if cat in summary: summary[cat].append(float(row.get("score", 0)))
-    return summary
-
-def construct_and_send_telegram():
-    """Generates the macro text layout and delivers it directly to Telegram."""
-    data = aggregate_scores()
-    body = "=== AUTOMATED GLOBAL MACRO REPORT ===\n\n"
+def send_telegram_alert():
+    bot_token = "8827323413:AAHMJWvAvXvrlVGESkHmY-TLhfvFacy3AsI"
+    chat_id = "1941531363"
+    api_url = f"https://telegram.org{bot_token}/sendMessage"
     
-    for asset, scores in data.items():
-        avg = sum(scores) / len(scores) if scores else 0.0
-        bias = "BULLISH BIAS" if avg > 0.15 else ("BEARISH BIAS" if avg < -0.15 else "NEUTRAL RANGE")
-        body += f"[{asset.upper()}]\n - Sentiment Index: {avg:.2f}\n - Forward Outlook: {bias}\n - History Samples: {len(scores)}\n\n"
+    # Build payload from scorecard
+    alert_lines = ["🚨 **X List Signal Report** 🚨\n"]
+    try:
+        with open("scorecard.csv", mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Format compact, scannable lines for mobile UI
+                line = f"🔹 **{row.get('ticker', 'N/A')}**: {row.get('score', '0')} | {row.get('sentiment', 'Neutral')}\n"
+                alert_lines.append(line)
+    except FileNotFoundError:
+        alert_lines.append("⚠️ Critical Error: scorecard.csv not found.")
 
-    # Both of your authentic Telegram routing data entries are locked in below
-    url = "https://telegram.org"
-    payload = {"chat_id": "1941531363", "text": body}
+    # Chunk payloads to guarantee visibility under 4096-char ceiling
+    full_message = "".join(alert_lines)
+    payload_chunks = [full_message[i:i+4000] for i in range(0, len(full_message), 4000)]
     
-    response = requests.post(url, json=payload)
-    print("Report pushed to Telegram." if response.status_code == 200 else f"Failed: {response.text}")
+    for chunk in payload_chunks:
+        payload = {
+            "chat_id": chat_id,
+            "text": chunk,
+            "parse_mode": "Markdown"
+        }
+        try:
+            response = requests.post(api_url, json=payload, timeout=10)
+            response.raise_for_status()
+            print(f"Transmission successful. HTTP Status: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"Network Handshake Failed: {e}")
+            if response is not None:
+                print(f"Telegram Server Response: {response.text}")
 
 if __name__ == "__main__":
-    construct_and_send_telegram()
+    send_telegram_alert()
