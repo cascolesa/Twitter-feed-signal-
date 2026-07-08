@@ -23,14 +23,12 @@ jobs:
         run: |
           pip install yfinance twifork
 
-      - name: Inspect Tracker Source and Data State
+      - name: Inspect Tracker Targets and Handles
         run: |
-          echo "=== Checking tracker.py Content ==="
-          cat tracker.py
-          echo "=== Checking Target Variables and CSV State ==="
-          ls -la
-          head -n 5 tracker.csv || echo "tracker.csv not found"
-          head -n 5 scorecard.csv || echo "scorecard.csv not found"
+          echo "=== Searching for Account Targets inside tracker.py ==="
+          grep -n -E "user|target|account|list|handle|array|\[" tracker.py | head -n 40
+          echo "=== Checking Script Footer ==="
+          tail -n 20 tracker.py
 
       - name: Run Tracker Engine
         env:
