@@ -2,11 +2,11 @@ import csv
 import requests
 
 def send_telegram_alert():
-    # Hardcoding your verified working credentials directly to eliminate secret-parsing bugs
+    # Hardcoding credentials to guarantee environment isolation
     bot_token = "8827323413:AAHMJWvAvXvrlVGESkHmY-TLhfvFacy3AsI"
     chat_id = "1941531363"
     
-    # Absolute, unalterable base URL string structure
+    # Absolute, structurally locked endpoint path
     api_url = f"https://telegram.org{bot_token}/sendMessage"
     
     alert_lines = ["🚨 **X List Signal Report** 🚨\n"]
@@ -17,7 +17,7 @@ def send_telegram_alert():
                 line = f"🔹 **{row.get('ticker', 'N/A')}**: {row.get('score', '0')} | {row.get('sentiment', 'Neutral')}\n"
                 alert_lines.append(line)
     except FileNotFoundError:
-        alert_lines.append("⚠️ System Metric Alert: scorecard.csv was not generated during this cycle.")
+        alert_lines.append("⚠️ Metric Tracking Alert: scorecard.csv missing this cycle.")
 
     full_message = "".join(alert_lines)
     payload_chunks = [full_message[i:i+4000] for i in range(0, len(full_message), 4000)]
@@ -30,13 +30,13 @@ def send_telegram_alert():
         }
         
         try:
-            print(f"📡 Initiating direct transmission handshake sequence to api.telegram.org...")
-            response = requests.post(api_url, json=payload, timeout=12)
+            print("📡 Handshake initialization started...")
+            response = requests.post(api_url, json=payload, timeout=15)
             response.raise_for_status()
-            print(f"🚀 SUCCESS: Message block delivered. Server Response Status: {response.status_code}")
+            print(f"🚀 SUCCESS: Packet accepted by Telegram. Status: {response.status_code}")
         except requests.exceptions.RequestException as e:
-            print(f"❌ TRANSMISSION FAILED: {e}")
-            raise SystemExit("Pipeline stopped: Network handshake validation failure.")
+            print(f"❌ TRANSMISSION CRASH: {e}")
+            raise SystemExit("Pipeline failure forced: Execution trace stopped.")
 
 if __name__ == "__main__":
     send_telegram_alert()
