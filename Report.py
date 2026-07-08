@@ -15,7 +15,7 @@ def aggregate_scores(file_path="scorecard.csv"):
     return summary
 
 def construct_and_send_email():
-    """Generates the macro text layout and delivers it directly to your inbox."""
+    """Generates the macro text layout and delivers it via Yahoo SMTP."""
     data = aggregate_scores()
     body = "=== AUTOMATED GLOBAL MACRO REPORT ===\n\n"
     
@@ -24,9 +24,9 @@ def construct_and_send_email():
         bias = "BULLISH BIAS" if avg > 0.15 else ("BEARISH BIAS" if avg < -0.15 else "NEUTRAL RANGE")
         body += f"[{asset.upper()}]\n - Sentiment Index: {avg:.2f}\n - Forward Outlook: {bias}\n - History Samples: {len(scores)}\n\n"
 
-    # Securely retrieve system environment login secrets
-    sender = os.environ.get("SENDER_EMAIL", "example@gmail.com")
-    password = os.environ.get("SENDER_PASSWORD", "secret_pass")
+    # Securely retrieve Yahoo system environment login secrets from GitHub
+    sender = os.environ.get("SENDER_EMAIL", "your_account@yahoo.com")
+    password = os.environ.get("SENDER_PASSWORD", "yahoo_app_password")
     
     msg = MIMEMultipart()
     msg['From'], msg['To'] = sender, "cascolesa@yahoo.com"
@@ -34,12 +34,13 @@ def construct_and_send_email():
     msg.attach(MIMEText(body, 'plain'))
     
     try:
-        server = smtplib.SMTP("://gmail.com", 587)
+        # Connect to specialized Yahoo outbound mail servers over TLS
+        server = smtplib.SMTP("smtp.mail.yahoo.com", 587)
         server.starttls()
         server.login(sender, password)
         server.sendmail(sender, msg['To'], msg.as_string())
         server.quit()
-        print("Macro brief successfully mailed out.")
+        print("Macro brief successfully mailed out via Yahoo Server.")
     except Exception as e:
         print(f"Mail failed to route: {e}\n\nFallback Report View:\n{body}")
 
