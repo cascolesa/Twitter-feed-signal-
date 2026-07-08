@@ -1,41 +1,31 @@
-name: Cloud X Signal Tracker
+name: Automated Macro Signal Update
 
 on:
   schedule:
-    - cron: '0 */12 * * *'
-  workflow_dispatch:
+    # This triggers the code automatically every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allows you to manually trigger it with a button click
 
 jobs:
-  run-tracker:
+  run-pipeline:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Set Up Python
-        uses: actions/setup-python@v6
+      - name: Set Up Python Engine
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Libraries
-        run: |
-          pip install yfinance twifork
+      - name: Install System Network Tools
+        run: pip install requests numpy
 
-      - name: Run Tracker Engine
-        env:
-          X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
-          X_CT0: ${{ secrets.X_CT0 }}
+      - name: Step 1 - Filter and Analyze Macro Data
         run: python tracker.py
 
-      - name: Save Tracking Changes
-        run: |
-          git config --global user.name "Cloud Automation Engine"
-          git config --global user.email "actions@github.com"
-          git add tracker.csv scorecard.csv
-          git commit -m "Automated trade matrix update" || exit 0
-          git push
-
-      - name: Display Top Analyst Signal Report
+      - name: Step 2 - Synthesize and Push Report to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python Report.py
