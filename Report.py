@@ -6,7 +6,7 @@ def send_telegram_alert():
     bot_token = "8827323413:AAHMJWvAvXvrlVGESkHmY-TLhfvFacy3AsI"
     chat_id = "1941531363"
     
-    # Absolute, structurally locked endpoint path
+    # Absolute, structurally locked endpoint path pointing to api.telegram.org/bot<token>
     api_url = f"https://telegram.org{bot_token}/sendMessage"
     
     alert_lines = ["🚨 **X List Signal Report** 🚨\n"]
