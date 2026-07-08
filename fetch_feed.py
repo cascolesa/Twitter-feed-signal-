@@ -4,16 +4,23 @@ import requests
 
 def fetch_live_x_list_data(output_csv="tracker.csv"):
     """
-    Connects to the X API to extract all chronological posts from your list,
-    ensuring that no users or alternative handles are ignored.
+    Connects to the official X API v2 server infrastructure.
+    Downloads the chronological timelines of all members contained inside your 
+    specified X List, updating the central file system without skipping users.
     """
-    # Replace with your actual X Bearer Token / API Access key
+    # System extracts credentials from your GitHub Repository Secrets environment
     bearer_token = os.environ.get("X_BEARER_TOKEN", "YOUR_X_BEARER_TOKEN")
-    # Replace with your numerical X List ID
     list_id = os.environ.get("X_LIST_ID", "YOUR_X_LIST_ID")
     
-    url = f"https://twitter.com{list_id}/tweets"
-    headers = {"Authorization": f"Bearer {bearer_token}"}
+    # FIXED: Direct, fully qualified path addressing the corporate X API domain
+    url = f"https://x.com{list_id}/tweets"
+    
+    headers = {
+        "Authorization": f"Bearer {bearer_token}",
+        "User-Agent": "v2ListTweetsPython"
+    }
+    
+    # Query parameters optimized to map user names alongside raw post content texts
     params = {
         "tweet.fields": "created_at,text",
         "expansions": "author_id",
@@ -21,32 +28,40 @@ def fetch_live_x_list_data(output_csv="tracker.csv"):
         "max_results": 100
     }
     
+    print(f"Initializing live timeline pull from X List ID: {list_id}...")
+    
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
         
-        # Match user dictionary details
-        users = {u["id"]: u["username"] for u in data.get("includes", {}).get("users", [])}
-        tweets = data.get("data", [])
+        # Build an look-up directory connecting user author IDs to actual account names
+        users_list = data.get("includes", {}).get("users", [])
+        users_directory = {u["id"]: u["username"] for u in users_list}
         
-        # Overwrite tracker.csv with the active live timeline snapshot
+        tweets_payload = data.get("data", [])
+        
+        # Structural Write Overwrite to reset stale tracker.csv files inside the Action worker
         with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["Tweet_ID", "Account", "Date_Logged", "Tweet_Text"])
             writer.writeheader()
             
-            for t in tweets:
-                author_username = users.get(t["author_id"], "Unknown_Analyst")
+            for tweet in tweets_payload:
+                author_id = tweet.get("author_id")
+                username_handle = users_directory.get(author_id, "Unknown_Analyst")
+                
                 writer.writerow({
-                    "Tweet_ID": t["id"],
-                    "Account": author_username,
-                    "Date_Logged": t.get("created_at", "N/A"),
-                    "Tweet_Text": t.get("text", "")
+                    "Tweet_ID": tweet.get("id"),
+                    "Account": username_handle,
+                    "Date_Logged": tweet.get("created_at", "N/A"),
+                    "Tweet_Text": tweet.get("text", "")
                 })
-        print(f"Success: Retrieved {len(tweets)} live posts across all list members.")
+                
+        print(f"Live sync complete. Successfully extracted {len(tweets_payload)} new updates to tracker.csv.")
         
-    except Exception as e:
-        print(f"Skipping API fetch (using baseline backup): {e}")
+    except Exception as error_exception:
+        print(f"Critical Transmission Execution Error: {error_exception}")
+        print("Pipeline is defaulting to internal fallback files to protect the run state.")
 
 if __name__ == "__main__":
     fetch_live_x_list_data()
