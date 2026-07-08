@@ -23,13 +23,56 @@ jobs:
         run: |
           pip install yfinance twifork
 
-      - name: Extract Processing Code
+      - name: Inject Diagnostic Loop Logging
         run: |
-          echo "=== Code Loop lines 175-245 ==="
-          sed -n '175,245p' tracker.py
+          python -c '
+          with open("tracker.py", "r") as f:
+              code = f.read()
+
+          # Locate the start of the loop and inject tracking print statements
+          target = "for tweet in tweets:"
+          debug_code = """for tweet in tweets:
+                  print(f"[DIAGNOSTIC] Processing Tweet ID: {tweet.id} from user: @{tweet.user.screen_name}")"""
+          code = code.replace(target, debug_code)
+
+          # Track if skipped due to existing ID
+          target_id = "if tweet.id in existing_ids or str(tweet.id) in existing_ids:\n            continue"
+          debug_id = "if tweet.id in existing_ids or str(tweet.id) in existing_ids:\n            print(f\"  -> SKIPPED: Tweet ID {tweet.id} already exists in CSV.\")\n            continue"
+          code = code.replace(target_id, debug_id)
+
+          # Track if skipped due to fundamental text validation rules
+          target_valid = "if not is_fundamentally_valid(text):\n            continue"
+          debug_valid = "if not is_fundamentally_valid(text):\n            print(f\"  -> SKIPPED: Failed is_fundamentally_valid check for text: {text[:50]}...\")\n            continue"
+          code = code.replace(target_valid, debug_valid)
+
+          # Track if skipped due to missing ticker symbol parsing
+          target_ticker = "if not ticker or ticker in [\"NATO\", \"EURO\", \"DROP\"]:\n            continue"
+          debug_ticker = "if not ticker or ticker in [\"NATO\", \"EURO\", \"DROP\"]:\n            print(f\"  -> SKIPPED: Invalid or blacklisted ticker symbol ({ticker}) parsed.\")\n            continue"
+          code = code.replace(target_ticker, debug_ticker)
+
+          # Track if skipped due to yfinance evaluation errors or flat pricing
+          target_price = "if entry_price == \"0.0\" or entry_price == \"0\":\n            continue"
+          debug_price = "if entry_price == \"0.0\" or entry_price == \"0\":\n            print(f\"  -> SKIPPED: yfinance entry price came back zero/empty for ticker {ticker}.\")\n            continue"
+          code = code.replace(target_price, debug_price)
+
+          with open("tracker.py", "w") as f:
+              f.write(code)
+          print("Diagnostic logging safely patched into memory.")
+          '
 
       - name: Run Tracker Engine
         env:
           X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
           X_CT0: ${{ secrets.X_CT0 }}
         run: python tracker.py
+
+      - name: Save Tracking Changes
+        run: |
+          git config --global user.name "Cloud Automation Engine"
+          git config --global user.email "actions@github.com"
+          git add tracker.csv scorecard.csv
+          git commit -m "Automated trade matrix update" || exit 0
+          git push
+
+      - name: Display Top Analyst Signal Report
+        run: python Report.py
