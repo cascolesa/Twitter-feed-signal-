@@ -2,30 +2,40 @@ name: Automated Macro Signal Update
 
 on:
   schedule:
-    # This triggers the code automatically every 6 hours
     - cron: '0 */6 * * *'
-  workflow_dispatch: # Allows you to manually trigger it with a button click
+  workflow_dispatch:
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Code Base
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Up Python Engine
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install System Network Tools
-        run: pip install requests numpy
+      - name: Install Dependencies
+        run: pip install requests
 
-      - name: Step 1 - Filter and Analyze Macro Data
+      # NOTE: Place your live web scrapers / X list pull routines right here 
+      # so that tracker.csv actually receives fresh live data before processing.
+
+      - name: Step 1 - Execute Macro Structural Filter
         run: python tracker.py
 
-      - name: Step 2 - Synthesize and Push Report to Telegram
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Step 2 - Formulate Systematic Trade Dispatches
         run: python Report.py
+
+      - name: Step 3 - Commit System State to Prevent Frozen Data
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Safely stage tracking logs to prevent duplicate message loops
+          git add sent_signals.txt scorecard.csv || true
+          git commit -m "chore: push automated system state tracking history [skip ci]" || true
+          git push origin main || true
