@@ -1,62 +1,47 @@
-import csv
 import os
-import html
-import sys
+import csv
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-if not os.path.exists("scorecard.csv"):
-    print("No scorecard data computed yet.")
-    sys.exit(0)
+def aggregate_scores(file_path="scorecard.csv"):
+    """Groups historical sentiment values by asset category to find the net tone."""
+    summary = {"forex": [], "commodities": [], "crypto": [], "stocks_and_indices": []}
+    if not os.path.exists(file_path): return summary
+    with open(file_path, mode="r", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            cat = row.get("category")
+            if cat in summary: summary[cat].append(float(row.get("score", 0)))
+    return summary
 
-with open("scorecard.csv", mode='r', encoding='utf-8') as f:
-    reader = csv.reader(f)
-    next(reader, None)
-    try:
-        top_row = next(reader)
-        top_analyst = top_row[0]
-    except StopIteration:
-        print("Scorecard is empty.")
-        sys.exit(0)
-
-print("==================================================")
-print(f"🔥 CURRENT LEADERBOARD WIN-RATE CHAMPION: @{top_analyst}")
-print("==================================================")
-
-if not os.path.exists("tracker.csv"):
-    print("No historical trade logs found in database.")
-    print("==================================================")
-    sys.exit(0)
-
-print("📋 LATEST VALID FINANCIAL RESEARCH FROM THIS ACCOUNT:")
-
-target = top_analyst.lower()
-with open("tracker.csv", mode='r', encoding='utf-8') as f:
-    reader = csv.reader(f)
-    try:
-        header = next(reader)
-    except StopIteration:
-        sys.exit(0)
+def construct_and_send_email():
+    """Generates the macro text layout and delivers it directly to your inbox."""
+    data = aggregate_scores()
+    body = "=== AUTOMATED GLOBAL MACRO REPORT ===\n\n"
     
-    # Direct case-insensitive normalization matching for flexible column headers
-    header_lower = [h.lower() for h in header]
-    idx_acct = header_lower.index('account') if 'account' in header_lower else 1
-    idx_date = header_lower.index('date_logged') if 'date_logged' in header_lower else (header_lower.index('date') if 'date' in header_lower else 2)
-    idx_text = header_lower.index('tweet_text') if 'tweet_text' in header_lower else (header_lower.index('text') if 'text' in header_lower else 3)
-    idx_tick = header_lower.index('ticker') if 'ticker' in header_lower else 4
-    idx_entr = header_lower.index('entry_price') if 'entry_price' in header_lower else 5
-    
-    matching_rows = []
-    for r in reader:
-        if len(r) > max(idx_acct, idx_tick) and r[idx_acct].lower() == target:
-            matching_rows.append(r)
-            
-    if matching_rows:
-        latest = matching_rows[-1]
-        clean_text = html.unescape(latest[idx_text].replace('\n', ' '))
-        print(f"• Date: {latest[idx_date]}")
-        print(f"• Asset: {latest[idx_tick]}")
-        print(f"• Entry: {latest[idx_entr]}")
-        print(f"• Summary Text: {clean_text}")
-    else:
-        print("No recent signals found for this account.")
+    for asset, scores in data.items():
+        avg = sum(scores) / len(scores) if scores else 0.0
+        bias = "BULLISH BIAS" if avg > 0.15 else ("BEARISH BIAS" if avg < -0.15 else "NEUTRAL RANGE")
+        body += f"[{asset.upper()}]\n - Sentiment Index: {avg:.2f}\n - Forward Outlook: {bias}\n - History Samples: {len(scores)}\n\n"
 
-print("==================================================")
+    # Securely retrieve system environment login secrets
+    sender = os.environ.get("SENDER_EMAIL", "example@gmail.com")
+    password = os.environ.get("SENDER_PASSWORD", "secret_pass")
+    
+    msg = MIMEMultipart()
+    msg['From'], msg['To'] = sender, "cascolesa@yahoo.com"
+    msg['Subject'] = "Global Macro Narrative Update Report"
+    msg.attach(MIMEText(body, 'plain'))
+    
+    try:
+        server = smtplib.SMTP("://gmail.com", 587)
+        server.starttls()
+        server.login(sender, password)
+        server.sendmail(sender, msg['To'], msg.as_string())
+        server.quit()
+        print("Macro brief successfully mailed out.")
+    except Exception as e:
+        print(f"Mail failed to route: {e}\n\nFallback Report View:\n{body}")
+
+if __name__ == "__main__":
+    construct_and_send_email()
