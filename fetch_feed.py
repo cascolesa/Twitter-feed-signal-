@@ -28,8 +28,8 @@ def fetch_timeline_via_auth(handle):
         return []
         
     clean_handle = handle.lstrip('@')
-    # Correct URL construction to properly query the specific user page profile routes
-    url = f"https://twitter.com{clean_handle}"
+    # Correct URL construction to use the active x.com production domain with a structural forward slash
+    url = f"https://x.com{clean_handle}"
     
     max_retries = 3
     timeout_seconds = 12
