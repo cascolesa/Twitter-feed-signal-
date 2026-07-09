@@ -1,8 +1,8 @@
 import csv
 import os
 
-# 1. Tier Weight Configuration
-TIER_1_ACCOUNTS = ['financialjuice', 'GlobalMacroZen', 'YCCMacro', 'ExanteData', 'Econimica']
+# 1. Tier Weight Configuration (Aligned with fetch_feed.py target indices)
+TIER_1_ACCOUNTS = ['financialjuice', 'GlobalMacroZen', 'YCOMacro', 'ExanteData', 'Econimica']
 
 # 2. Enhanced Keyword Maps (Direction-Aware)
 GROWTH_EXPANSION = ['pmi expansion', 'gdp beats', 'growth surges', 'hiring booms', 'strong retail']
@@ -27,8 +27,9 @@ if os.path.exists("tracker.csv"):
         reader = csv.DictReader(f)
         
         for row in reader:
-            account = row.get("Account", "")
-            text = (row.get("Tweet_Text") or row.get("tweet_text") or "").lower()
+            # Map explicitly to fetch_feed.py header outputs: 'handle' and 'description'
+            account = row.get("handle", "")
+            text = (row.get("description") or "").lower()
             if not text:
                 continue
                 
@@ -37,23 +38,38 @@ if os.path.exists("tracker.csv"):
             # Apply Tier 1 (3x) or Tier 2 (1x) Multiplier Weight
             weight = 3 if account in TIER_1_ACCOUNTS else 1
             
-            # Score Growth Vector
+            # Score Growth Vector (Capped per tweet to protect matrix scale boundaries)
+            growth_match = False
             for kw in GROWTH_EXPANSION:
-                if kw in text: growth_vector += (1 * weight)
+                if kw in text and not growth_match: 
+                    growth_vector += (1 * weight)
+                    growth_match = True
             for kw in GROWTH_CONTRACTION:
-                if kw in text: growth_vector -= (1 * weight)
+                if kw in text and not growth_match: 
+                    growth_vector -= (1 * weight)
+                    growth_match = True
                 
             # Score Inflation Vector
+            inflation_match = False
             for kw in INFLATION_HAWKISH:
-                if kw in text: inflation_vector += (1 * weight)
+                if kw in text and not inflation_match: 
+                    inflation_vector += (1 * weight)
+                    inflation_match = True
             for kw in INFLATION_DOVISH:
-                if kw in text: inflation_vector -= (1 * weight)
+                if kw in text and not inflation_match: 
+                    inflation_vector -= (1 * weight)
+                    inflation_match = True
                 
             # Score Liquidity Vector
+            liquidity_match = False
             for kw in LIQUIDITY_EXPANSION:
-                if kw in text: liquidity_vector += (1 * weight)
+                if kw in text and not liquidity_match: 
+                    liquidity_vector += (1 * weight)
+                    liquidity_match = True
             for kw in LIQUIDITY_CONTRACTION:
-                if kw in text: liquidity_vector -= (1 * weight)
+                if kw in text and not liquidity_match: 
+                    liquidity_vector -= (1 * weight)
+                    liquidity_match = True
 
 # 3. Structural Matrix Regime Clash Analysis
 overall_bias = "NEUTRAL (Wait for Data)"
