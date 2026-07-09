@@ -1,82 +1,76 @@
 import csv
 import logging
 import urllib.request
-import xml.etree.ElementTree as ET
+import json
+import os
+import re
 import time
 
-# Configure clean logging output for GitHub Actions runner console
+# Configure logging for GitHub Actions runner stdout
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Geographically distributed public RSSHub mirror instances
-RSSHUB_INSTANCES = [
-    "https://rsshub.rssforever.com",
-    "https://moeyy.xyz",
-    "https://rsshub.app"
-]
+# Reads the mapped token passed dynamically via the workflow env block
+X_AUTH_TOKEN = os.environ.get("TWITTER_AUTH_TOKEN")
 
-# Core macroeconomic accounts target tracking vector
+# Core macro account targets vector
 TARGET_HANDLES = ["financialjuice", "GlobalMacroZen", "YCCMacro", "ExanteData", "Econimica"]
 
-def fetch_rsshub_with_failover(handle):
-    # Sanitize user string context to match endpoint schema paths
+def fetch_timeline_via_auth(handle):
+    if not X_AUTH_TOKEN:
+        logging.critical("CRITICAL: TWITTER_AUTH_TOKEN secret mapping missing from execution context.")
+        return []
+        
     clean_handle = handle.lstrip('@')
+    url = f"https://twitter.com{clean_handle}"
+    logging.debug(f"Querying secure authenticated timeline for: @{clean_handle}")
     
-    for instance in RSSHUB_INSTANCES:
-        # Standardized RSSHub Twitter user endpoint route string
-        url = f"{instance}/twitter/user/{clean_handle}"
-        logging.debug(f"Connecting to RSSHub Matrix Route: {url}")
+    try:
+        req = urllib.request.Request(url)
+        # Mimic desktop chrome footprints to pass client verification protocols smoothly
+        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        req.add_header('Cookie', f'auth_token={X_AUTH_TOKEN}')
         
-        try:
-            req = urllib.request.Request(
-                url, 
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SystematicEngine/2.0'}
-            )
+        with urllib.request.urlopen(req, timeout=12) as response:
+            if response.getcode() != 200:
+                logging.warning(f"Server rejected token handshake with status code: {response.getcode()}")
+                return []
+                
+            html_content = response.read().decode('utf-8')
             
-            # Explicit timeout limit to prevent GitHub runner hanging loops
-            with urllib.request.urlopen(req, timeout=15) as response:
-                status = response.getcode()
-                logging.debug(f"HTTP Return Status: {status} from node [{instance}]")
+            # Extract underlying timeline context state out of the native script layout tags
+            match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html_content)
+            if not match:
+                match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', html_content)
                 
-                if status != 200:
-                    continue
-                    
-                raw_data = response.read()
+            if match:
+                data = json.loads(match.group(1))
+                entries = data.get("props", {}).get("pageProps", {}).get("timeline", {}).get("entries", [])
+                logging.info(f"Successfully extracted {len(entries)} raw timeline entries for @{clean_handle}")
+                return entries
                 
-                if not raw_data or len(raw_data.strip()) == 0:
-                    logging.warning(f"Node response contains null bytes on {instance} for handle: @{clean_handle}")
-                    continue
-                
-                # Dynamic XML processing checkpoint
-                root = ET.fromstring(raw_data)
-                items = root.findall('.//item')
-                
-                if len(items) == 0:
-                    logging.warning(f"Valid RSSHub wrapper structural check, but 0 items listed on {instance}")
-                    continue
-                
-                logging.info(f"Successfully processed {len(items)} items from {instance} for target @{clean_handle}")
-                return items
-                
-        except ET.ParseError as xml_fault:
-            logging.error(f"Malformed structural layout on node {instance}: {str(xml_fault)}")
-        except Exception as conn_error:
-            logging.warning(f"Connection pool failure on routing node {instance}: {str(conn_error)}")
+            logging.warning(f"Could not locate matching target state JSON bundle for @{clean_handle}")
+            return []
             
-        # Throttling step to respect server backplanes
-        time.sleep(2.0)
-        
-    logging.critical(f"Upstream pipeline down. All instances exhausted for handle: @{clean_handle}")
-    return []
+    except Exception as e:
+        logging.error(f"Authorized validation handshake failed for @{clean_handle}: {str(e)}")
+        return []
 
-# Execute pipeline compilation and commit arrays to local file system
+# Execute processing matrix data compilation loop
 with open('tracker.csv', mode='w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f)
     writer.writerow(['handle', 'title', 'description', 'pubDate'])
     
     for target in TARGET_HANDLES:
-        posts = fetch_rsshub_with_failover(target)
-        for post in posts:
-            title = post.find('title').text if post.find('title') is not None else ""
-            desc = post.find('description').text if post.find('description') is not None else ""
-            date = post.find('pubDate').text if post.find('pubDate') is not None else ""
-            writer.writerow([target, title, desc, date])
+        entries = fetch_timeline_via_auth(target)
+        for entry in entries:
+            tweet = entry.get("content", {}).get("itemContent", {}).get("tweet_results", {}).get("result", {})
+            legacy = tweet.get("legacy", {})
+            
+            text = legacy.get("full_text", "")
+            date = legacy.get("created_at", "")
+            
+            if text:
+                writer.writerow([target, "Tweet", text, date])
+                
+        # Flow rate buffer delay to emulate baseline scrolling
+        time.sleep(2.0)
