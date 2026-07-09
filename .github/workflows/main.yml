@@ -39,10 +39,5 @@ jobs:
           git add tracker.csv scorecard.csv
           
           # Only commit and push if new files or logs changed to avoid zero-byte commit loop failures
-          if ! git diff --cached --quiet; then
-            git commit -m "sys: automated quantamental matrix state update [skip ci]"
-            git push
-            print("State logs safely pushed back to repository storage.")
-          else
-            print("No new delta change detected. State remains static.")
-          fi
+                    git diff --quiet && git diff --cached --quiet || (git commit -m "sys: automated quantamental matrix state update [skip ci]" && git push)
+
