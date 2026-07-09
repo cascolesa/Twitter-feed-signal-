@@ -26,12 +26,19 @@ jobs:
           echo "=== SYSTEM DNS LOOKUP INSPECTION ==="
           cat /etc/resolv.conf || true
           
-          echo "=== TESTING DIRECT OUTBOUND ROUTING TO X ==="
-          curl -I --connect-timeout 5 https://twitter.com || true
-          
           echo "=== RECONFIGURING DNS OVERRIDES ==="
           # Overwrite runner DNS configuration with highly reliable public options if localized mapping is broken
           sudo sh -c 'printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" > /etc/resolv.conf'
+          
+          echo "=== INJECTING DIRECT IP MAPPINGS (BYPASSING DNS COMPLETELY) ==="
+          # Maps twitter.com explicitly to authoritative X network edge nodes
+          sudo sh -c 'printf "\n104.244.42.1 twitter.com\n104.244.42.129 twitter.com\n104.244.42.2 api.twitter.com\n" >> /etc/hosts'
+          
+          echo "=== VERIFYING HOST LAYER RESOLUTION ==="
+          cat /etc/hosts
+          
+          echo "=== TESTING DIRECT OUTBOUND ROUTING TO X ==="
+          curl -I --connect-timeout 5 https://twitter.com || true
           
           echo "=== FLUSHING SYSTEM SYSTEMD RESOLVER CACHE ==="
           sudo resolvectl flush-caches || true
