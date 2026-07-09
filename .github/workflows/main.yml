@@ -1,41 +1,48 @@
-name: Automated Macro Signal Update
+name: Systematic Global Macro Trade Engine
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *' # Executes automatically every 6 hours
+  workflow_dispatch: # Allows manual trigger button via GitHub UI
 
 jobs:
-  run-pipeline:
+  run-macro-engine:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code Base
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    
+    permissions:
+      contents: write # Grants runner explicit security rights to push state updates
 
-      - name: Set Up Python Engine
+    steps:
+      - name: Checkout Repository Codebase
+        uses: actions/checkout@v4
+
+      - name: Initialize Stable Python Environment
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
-        run: pip install requests
+      - name: Execute Live Multi-Source Ingestion Pipeline
+        run: python fetch_feed.py
 
-      # NOTE: Place your live web scrapers / X list pull routines right here 
-      # so that tracker.csv actually receives fresh live data before processing.
-
-      - name: Step 1 - Execute Macro Structural Filter
+      - name: Execute Quantamental Regime Vector Scoring
         run: python tracker.py
 
-      - name: Step 2 - Formulate Systematic Trade Dispatches
+      - name: Formulate Trade Thesis and Dispatch Telegram Alert
         run: python Report.py
 
-      - name: Step 3 - Commit System State to Prevent Frozen Data
+      - name: Secure State History Write-Back Commit
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Safely stage tracking logs to prevent duplicate message loops
-          git add sent_signals.txt scorecard.csv || true
-          git commit -m "chore: push automated system state tracking history [skip ci]" || true
-          git push origin main || true
+          git config --global user.email "github-actions[bot]@://github.com"
+          
+          # Stage tracking assets if updated
+          git add tracker.csv scorecard.csv
+          
+          # Only commit and push if new files or logs changed to avoid zero-byte commit loop failures
+          if ! git diff --cached --quiet; then
+            git commit -m "sys: automated quantamental matrix state update [skip ci]"
+            git push
+            print("State logs safely pushed back to repository storage.")
+          else
+            print("No new delta change detected. State remains static.")
+          fi
