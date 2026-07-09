@@ -41,8 +41,14 @@ def generate_macro_dashboard_html():
             with open(scorecard_file, mode='r', encoding='utf-8') as f:
                 reader = csv.reader(f)
                 for row in reader:
-                    if row:
-                        html_body += f"• <code>{escape_html_tags(' | '.join(row))}</code>\n"
+                    if not row or len(row) < 2:
+                        continue
+                    # Skip printing raw column title array labels directly
+                    if row[0] == "Metric_Type":
+                        continue
+                    metric = escape_html_tags(row[0])
+                    val = escape_html_tags(row[1])
+                    html_body += f"• {metric.replace('_', ' ')}: <code>{val}</code>\n"
             html_body += "\n"
         except Exception as csv_error:
             html_body += f"<i>[Warning] Failed to parse scorecard matrix: {str(csv_error)}</i>\n\n"
@@ -64,12 +70,16 @@ def generate_macro_dashboard_html():
                         break
                         
                     handle = escape_html_tags(row.get('handle', 'UNKNOWN'))
-                    description = escape_html_tags(row.get('description', ''))
+                    raw_description = row.get('description', '')
                     pub_date = escape_html_tags(row.get('pubDate', ''))
                     
-                    if description:
+                    if raw_description:
+                        # Slice the raw payload first to prevent splitting mid-HTML escaped character entity
+                        truncated_raw = raw_description[:120] + "..." if len(raw_description) > 120 else raw_description
+                        description = escape_html_tags(truncated_raw)
+                        
                         html_body += f"<b>@{handle}</b> | <i>{pub_date}</i>\n"
-                        html_body += f"└ <code>{description[:120]}</code>\n\n"
+                        html_body += f"└ <code>{description}</code>\n\n"
                         records_processed += 1
                         
                 if records_processed == 0:
