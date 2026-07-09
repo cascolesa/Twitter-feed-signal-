@@ -26,29 +26,17 @@ jobs:
           echo "=== SYSTEM DNS LOOKUP INSPECTION ==="
           cat /etc/resolv.conf || true
           
-          echo "=== RECONFIGURING DNS OVERRIDES ==="
-          # Overwrite runner DNS configuration with highly reliable public options if localized mapping is broken
-          sudo sh -c 'printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" > /etc/resolv.conf'
-          
-          echo "=== INJECTING DIRECT IP MAPPINGS (BYPASSING DNS COMPLETELY) ==="
-          # Maps twitter.com explicitly to authoritative X network edge nodes
-          sudo sh -c 'printf "\n104.244.42.1 twitter.com\n104.244.42.129 twitter.com\n104.244.42.2 api.twitter.com\n" >> /etc/hosts'
-          
-          echo "=== VERIFYING HOST LAYER RESOLUTION ==="
-          cat /etc/hosts
-          
-          echo "=== TESTING DIRECT OUTBOUND ROUTING TO X ==="
-          curl -I --connect-timeout 5 https://twitter.com || true
-          
           echo "=== FLUSHING SYSTEM SYSTEMD RESOLVER CACHE ==="
           sudo resolvectl flush-caches || true
 
       - name: Execute Live Multi-Source Ingestion Pipeline
         env:
           TWITTER_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
-          # Single case definition satisfies runner infrastructure requirements while clearing out system proxies
+          # Explicitly clear both case configurations to prevent runner infrastructure proxy hijacking
           http_proxy: ""
           https_proxy: ""
+          HTTP_PROXY: ""
+          HTTPS_PROXY: ""
         run: |
           echo "=== STARTING DIRECT AUTHORIZED INGESTION ==="
           python fetch_feed.py
