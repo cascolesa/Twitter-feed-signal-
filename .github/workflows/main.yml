@@ -22,22 +22,43 @@ jobs:
           python-version: '3.10'
 
       - name: Execute Live Multi-Source Ingestion Pipeline
-        run: python fetch_feed.py
+        run: |
+          echo "=== STARTING DATA INGESTION ==="
+          python fetch_feed.py
+          
+          # Compute file row count safely to prevent silent 0-item matrix execution
+          ROW_COUNT=$(wc -l < tracker.csv 2>/dev/null || echo 0)
+          echo "DEBUG: tracker.csv line count detected at: $ROW_COUNT"
+          
+          if [ "$ROW_COUNT" -le 1 ]; then
+            echo "::error title=Ingest Warning::Upstream RSS targets returned an empty stream. Inspecting file buffer."
+            echo "=== RAW TRACKER.CSV HEAD ==="
+            cat tracker.csv
+            echo "=== SYSTEM NETWORK ROUTE DIAGNOSTIC ==="
+            curl -I -s --max-time 5 https://poast.org || echo "Network route failed to reach target endpoint"
+          fi
 
       - name: Execute Quantamental Regime Vector Scoring
-        run: python tracker.py
+        run: |
+          echo "=== PROCESSING FACTOR MATRICES ==="
+          python tracker.py
+          echo "=== SCORECARD ARRAYS PREVIEW ==="
+          cat scorecard.csv || echo "scorecard.csv target missing from runner directory"
 
       - name: Formulate Trade Thesis and Dispatch Telegram Alert
-        run: python Report.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          echo "=== PACKAGING HTML DISPATCH ==="
+          python Report.py
 
       - name: Secure State History Write-Back Commit
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@://github.com"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           # Stage tracking assets if updated
           git add tracker.csv scorecard.csv
           
           # Only commit and push if new files or logs changed to avoid zero-byte commit loop failures
-                    git diff --quiet && git diff --cached --quiet || (git commit -m "sys: automated quantamental matrix state update [skip ci]" && git push)
-
+          git diff --quiet && git diff --cached --quiet || (git commit -m "sys: automated quantamental matrix state update [skip ci]" && git push)
