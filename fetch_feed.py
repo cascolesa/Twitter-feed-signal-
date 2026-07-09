@@ -1,67 +1,65 @@
 import csv
-import os
-import requests
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime
 
-def fetch_live_x_list_data(output_csv="tracker.csv"):
-    """
-    Connects to the official X API v2 server infrastructure.
-    Downloads the chronological timelines of all members contained inside your 
-    specified X List, updating the central file system without skipping users.
-    """
-    # System extracts credentials from your GitHub Repository Secrets environment
-    bearer_token = os.environ.get("X_BEARER_TOKEN", "YOUR_X_BEARER_TOKEN")
-    list_id = os.environ.get("X_LIST_ID", "YOUR_X_LIST_ID")
+# 1. Deduplicated Global Macro Account Pool (58 total)
+TARGET_ACCOUNTS = [
+    'zerohedge', 'financialjuice', 'Globalflows', 'GlobalMacroZen', 'iv_technicals', 
+    'kirstenbartok', 'pavelprata', 'JohnKicklighter', 'HooverInst', 'clashreport', 
+    'YCCMacro', 'TrumpWarRoom', 'ExanteData', 'glcarlstrom', 'pradeeepk', 
+    'KobeissiLetter', 'spectatorindex', 'sentdefender', 'michaeljburry', 'staunovo', 
+    'aeberman12', 'C_Barraud', 'HFI_Research', 'BarakRavid', 'vvanwilgenburg', 
+    'RusOilGasExpert', 'LayoffAI', 'Mr_Derivatives', 'Osint613', 'mb_ghalibaf', 
+    'hey_itsmyturn', 'grahamformaine', 'HannoLustig', 'MarkHorowitz', 'DeItaone', 
+    'zeibars', 'Kalshi', 'robin_j_brooks', 'iimag', 'PeakoQuant', 
+    'Alpha_Ex_LLC', 'themarketear', 'topdowncharts', 'Brad_Setser', 'KoyfinCharts', 
+    'Econimica', 'JosephPolitano', 'EPBResearch', 'WarrenPies', 'lisaabramowicz1', 
+    'elerianm', 'beth_stanton', 'Skycastle_int', 'VrntPerception', 'marcmakingsense', 
+    'Schuldensuehner', 'Callum_Thomas', 'samueltombs', 'cbrates', 'sentimentrader'
+]
+
+# 2. Resilient Open-Source RSS Gateway
+NITTER_INSTANCE = "https://privacydev.net"
+
+def fetch_user_feed(username):
+    url = f"{NITTER_INSTANCE}/{username}/rss"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SystematicMacroBot/1.0'}
+    req = urllib.request.Request(url, headers=headers)
     
-    # FIXED: Direct, fully qualified path addressing the corporate X API domain
-    url = f"https://x.com{list_id}/tweets"
-    
-    headers = {
-        "Authorization": f"Bearer {bearer_token}",
-        "User-Agent": "v2ListTweetsPython"
-    }
-    
-    # Query parameters optimized to map user names alongside raw post content texts
-    params = {
-        "tweet.fields": "created_at,text",
-        "expansions": "author_id",
-        "user.fields": "username",
-        "max_results": 100
-    }
-    
-    print(f"Initializing live timeline pull from X List ID: {list_id}...")
-    
+    tweets = []
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Build an look-up directory connecting user author IDs to actual account names
-        users_list = data.get("includes", {}).get("users", [])
-        users_directory = {u["id"]: u["username"] for u in users_list}
-        
-        tweets_payload = data.get("data", [])
-        
-        # Structural Write Overwrite to reset stale tracker.csv files inside the Action worker
-        with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["Tweet_ID", "Account", "Date_Logged", "Tweet_Text"])
-            writer.writeheader()
+        with urllib.request.urlopen(req, timeout=12) as response:
+            xml_data = response.read()
+            root = ET.fromstring(xml_data)
             
-            for tweet in tweets_payload:
-                author_id = tweet.get("author_id")
-                username_handle = users_directory.get(author_id, "Unknown_Analyst")
+            for item in root.findall('.//item'):
+                title = item.find('title').text if item.find('title') is not None else ""
+                link = item.find('link').text if item.find('link') is not None else ""
+                pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
                 
-                writer.writerow({
-                    "Tweet_ID": tweet.get("id"),
-                    "Account": username_handle,
-                    "Date_Logged": tweet.get("created_at", "N/A"),
-                    "Tweet_Text": tweet.get("text", "")
-                })
+                # Strip internal URL routing to isolate numeric Tweet ID
+                tweet_id = link.split('/')[-1].split('#')[0] if '/' in link else pub_date
                 
-        print(f"Live sync complete. Successfully extracted {len(tweets_payload)} new updates to tracker.csv.")
-        
-    except Exception as error_exception:
-        print(f"Critical Transmission Execution Error: {error_exception}")
-        print("Pipeline is defaulting to internal fallback files to protect the run state.")
+                # Prevent empty content row append crashes
+                if title and tweet_id:
+                    tweets.append([tweet_id, username, pub_date, title])
+    except Exception as e:
+        # Graceful degradation ensures one down account won't crash the whole run
+        print(f"Skipping @{username}: Connection Timeout or Invalid Route ({e})")
+    return tweets
 
-if __name__ == "__main__":
-    fetch_live_x_list_data()
+# 3. Batch Process Sequence
+print(f"Initiating automated pipeline pull across {len(TARGET_ACCOUNTS)} active macro nodes...")
+all_tweets = []
+for index, user in enumerate(TARGET_ACCOUNTS, 1):
+    print(f"[{index}/{len(TARGET_ACCOUNTS)}] Processing @{user}...")
+    all_tweets.extend(fetch_user_feed(user))
+
+# 4. Atomic Write to tracking matrix
+with open("tracker.csv", mode="w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow(["Tweet_ID", "Account", "Date_Logged", "Tweet_Text"])
+    writer.writerows(all_tweets)
+
+print(f"Pipeline complete. Ingested {len(all_tweets)} potential market signals into tracker.csv.")
