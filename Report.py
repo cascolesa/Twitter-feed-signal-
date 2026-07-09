@@ -4,7 +4,7 @@ import urllib.request
 import urllib.parse
 import json
 
-# 1. Telemetry & Routing Configuration
+# 1. Telemetry & Routing Configuration (Fixed Variable Alignment)
 TELEGRAM_BOT_TOKEN = "8827323413:AAHMJWvAvXvrlVGESkHmY-TLhfvFacy3AsI"
 TELEGRAM_CHAT_ID = "1941531363"
 
@@ -52,7 +52,8 @@ html_message = f"""<b>📊 SYSTEMATIC GLOBAL MACRO SCORECARD</b>
 
 # 4. Dispatch Secure HTML Payload via Native API Request
 def send_telegram_broadcast(text):
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    # FIXED: Replaced 'bot_token' with 'TELEGRAM_BOT_TOKEN' to resolve NameError
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": text,
