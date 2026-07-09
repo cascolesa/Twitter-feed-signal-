@@ -22,8 +22,10 @@ jobs:
           python-version: '3.10'
 
       - name: Execute Live Multi-Source Ingestion Pipeline
+        env:
+          TWITTER_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
         run: |
-          echo "=== STARTING DATA INGESTION ==="
+          echo "=== STARTING DIRECT AUTHORIZED INGESTION ==="
           python fetch_feed.py
           
           # Compute file row count safely to prevent silent 0-item matrix execution
@@ -31,11 +33,9 @@ jobs:
           echo "DEBUG: tracker.csv line count detected at: $ROW_COUNT"
           
           if [ "$ROW_COUNT" -le 1 ]; then
-            echo "::error title=Ingest Warning::Upstream RSS targets returned an empty stream. Inspecting file buffer."
+            echo "::error title=Ingest Warning::Upstream authenticated stream returned an empty array. Inspecting file buffer."
             echo "=== RAW TRACKER.CSV HEAD ==="
             cat tracker.csv
-            echo "=== SYSTEM NETWORK ROUTE DIAGNOSTIC ==="
-            curl -I -s --max-time 5 https://poast.org || echo "Network route failed to reach target endpoint"
           fi
 
       - name: Execute Quantamental Regime Vector Scoring
