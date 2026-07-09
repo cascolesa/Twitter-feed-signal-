@@ -1,3 +1,6 @@
-Analyst_Handle,Total_Forecasts,Matured_Wins,Matured_Losses,Active_Open,Win_Rate_%,Status_Flag
-KoyfinCharts,2,0,0,2,0.0%,UNDER_REVIEW
-staunovo,1,0,0,1,0.0%,UNDER_REVIEW
+Metric_Type,Value
+Processed_Feeds,0
+Growth_Vector,0
+Inflation_Vector,0
+Liquidity_Vector,0
+Calculated_Bias,NEUTRAL (Wait for Data)
