@@ -7,10 +7,11 @@ from datetime import datetime, timezone
 # Configuration matrices for targeted positional macro feeds
 TELEGRAM_CHANNELS = ["FinancialJuice", "macromicro_en", "fbsanalytics", "forexlive", "demarkanalytics"]
 RSS_FEEDS = {
-    "FRED_Macro": "https://stlouisfed.org",
+    "FRED_CPI": "https://stlouisfed.org",
+    "FRED_Rates": "https://stlouisfed.org",
+    "FRED_GDP": "https://stlouisfed.org",
     "ECB_Policy": "https://europa.eu",
-    "IMF_Global": "https://imf.org",
-    "WorldBank_Indicators": "https://worldbank.org"
+    "IMF_Global": "https://imf.org"
 }
 
 def clear_network_blocks():
@@ -22,7 +23,7 @@ def fetch_url_data(url):
     """Executes a 3-tier request retry loop with localized browser spoofing."""
     req = urllib.request.Request(
         url, 
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     )
     for attempt in range(3):
         try:
@@ -55,6 +56,7 @@ def parse_rss_date(date_str):
     formats = [
         "%a, %d %b %Y %H:%M:%S %Z",
         "%a, %d %b %Y %H:%M:%S %z",
+        "%d %b %Y %H:%M:%S %Z",
         "%Y-%m-%dT%H:%M:%SZ"
     ]
     for fmt in formats:
@@ -88,13 +90,24 @@ def pull_all_feeds():
             continue
         try:
             root = ET.fromstring(raw_xml)
-            for item in root.findall('.//item'):
-                title = item.find('title').text if item.find('title') is not None else ""
-                desc = item.find('description').text if item.find('description') is not None else ""
-                pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
+            # Support standard RSS channel structures and Atom variants
+            items = root.findall('.//item') if root.findall('.//item') else root.findall('.//{http://w3.org}entry')
+            
+            for item in items:
+                title_elem = item.find('title') if item.find('title') is not None else item.find('{http://w3.org}title')
+                desc_elem = item.find('description') if item.find('description') is not None else item.find('{http://w3.org}summary')
+                date_elem = item.find('pubDate') if item.find('pubDate') is not None else item.find('{http://w3.org}updated')
+                
+                title = title_elem.text if title_elem is not None and title_elem.text else ""
+                desc = desc_elem.text if desc_elem is not None and desc_elem.text else ""
+                pub_date = date_elem.text if date_elem is not None and date_elem.text else ""
                 
                 iso_timestamp = parse_rss_date(pub_date)
-                combined_content = f"{title} {desc}".replace("\n", " ").strip()
+                combined_content = f"{title} {desc}"
+                # Strip raw HTML tags that often embed within RSS descriptions
+                combined_content = re.sub(r'<[^>]+>', '', combined_content)
+                combined_content = combined_content.replace("\n", " ").strip()
+                
                 if combined_content:
                     master_dataset.append(f"[TIMESTAMP:{iso_timestamp}][SOURCE:RSS][CHANNEL:{feed_name}] {combined_content}")
         except Exception:
