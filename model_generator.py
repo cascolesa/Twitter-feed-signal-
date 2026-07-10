@@ -1,7 +1,7 @@
 import os
 import re
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # Precise Asset Mapping Grid
 ASSET_KEYWORDS = {
@@ -19,20 +19,18 @@ def get_dynamic_cutoff(now):
     current_month = now.month
     current_year = now.year
     
-    # 1. Establish the absolute start of the current calendar quarter
+    # Establish the absolute start of the current calendar quarter
     current_quarter = (current_month - 1) // 3 + 1
     q_start_month = (current_quarter - 1) * 3 + 1
     quarter_start_dt = datetime(current_year, q_start_month, 1, tzinfo=timezone.utc)
     
-    # 2. Identify if we are in Month 2 of the quarter (Feb, May, Aug, Nov)
-    # If true, apply a strict 30-day filter to absorb only current quarter data.
-    is_month_two = (current_month in [2, 5, 8, 11])
+    # Identify Month 2 of any quarter (Feb, May, Aug, Nov)
+    is_month_two = current_month in [2, 5, 8, 11]
     
     if is_month_two:
-        # Fallback to a hard rolling 30 days if it's more restrictive than the quarter boundary
         days_diff = (now - quarter_start_dt).days
         if days_diff > 30:
-            return now - datetime.timedelta(days=30)
+            return now - timedelta(days=30)
             
     return quarter_start_dt
 
@@ -41,7 +39,6 @@ def calculate_time_decay(post_time, now, half_life_days=14.0):
     delta_days = (now - post_time).total_seconds() / 86400.0
     if delta_days < 0:
         delta_days = 0.0
-    # Exponential decay formula: W = 0.5 ^ (t / t_half)
     return math.pow(0.5, delta_days / half_life_days)
 
 def categorize_and_tag_matrix():
@@ -63,7 +60,6 @@ def categorize_and_tag_matrix():
         if not line_clean:
             continue
             
-        # Parse timestamp from ingest metadata block
         ts_match = re.search(r"^\[TIMESTAMP:([^\]]+)\]", line_clean)
         if not ts_match:
             continue
@@ -75,28 +71,21 @@ def categorize_and_tag_matrix():
         except Exception:
             continue
 
-        # 1. Enforce strict quarterly data boundary drop
         if post_time < cutoff_date:
             continue
 
-        # Calculate localized [TIME_DECAY] continuous float value
         decay_weight = calculate_time_decay(post_time, now)
-        
-        # Remove timestamp tag from the message body to keep parsing lightweight
         body_text = re.sub(r"^\[TIMESTAMP:[^\]]+\]", "", line_clean).strip()
         body_lower = body_text.lower()
 
-        # 2. Identify Assets Found inside text
         matched_assets = []
         for asset, patterns in ASSET_KEYWORDS.items():
             if any(re.search(p, body_lower) for p in patterns):
                 matched_assets.append(asset)
                 
-        # Skip lines that do not match our multi-asset operational matrix
         if not matched_assets:
             continue
 
-        # 3. Assign structural reading workflow tags
         is_numerical = any(char.isdigit() and "%" in body_lower for char in body_lower)
         is_macro = any(re.search(p, body_lower) for p in MACRO_KEYWORDS)
 
@@ -107,7 +96,6 @@ def categorize_and_tag_matrix():
         else:
             workflow_tag = "[MODEL:BIPOLAR_MOMENTUM]"
 
-        # 4. Compile the structured row entry with time weight matrix attached
         asset_string = ",".join(matched_assets)
         tagged_output.append(f"{workflow_tag}[ASSETS:{asset_string}][TIME_DECAY:{decay_weight:.4f}] {body_text}")
 
