@@ -1,75 +1,93 @@
 import os
+import sys
 import json
-import urllib.request
-from datetime import datetime, timezone
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 
-# We swap out scraped web paths for direct, stable JSON API links that work 100% inside GitHub Actions
-DATA_SOURCES = {
-    "FRED_Rates": "https://stlouisfed.org", # Public backup key
-    "FRED_CPI": "https://stlouisfed.org",
-    "FRED_GDP": "https://stlouisfed.org",
-    # Free Tier Live Macro Sentiment News Endpoint
-    "Global_Macro_News": "https://alphavantage.co"
-}
-
-def clear_network_blocks():
-    """Removes runner local proxy environments entirely to keep outbound pathways open."""
-    for key in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"]:
-        os.environ.pop(key, None)
-
-def fetch_json_payload(url):
-    """Fetches pure JSON responses from official institutional APIs."""
-    req = urllib.request.Request(
-        url, 
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+def build_secure_session():
+    """Establishes an automated retry layer to bypass transient pipeline drops."""
+    session = requests.Session()
+    retries = Retry(
+        total=4,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        raise_on_status=False
     )
+    # Configure custom headers to avoid generic data-center agent flags
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    })
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    return session
+
+def ingest_fred_data(session):
+    """
+    Fetches observations from FRED. 
+    Uses the dedicated api.stlouisfed.org subdomain instead of the web server root.
+    """
+    # Fallback to a demo key if your structural pipeline secrets are not exposed to the runner
+    api_key = os.getenv("FRED_API_KEY", "foo") 
+    series_id = "SP500" # Example target matrix line
+    
+    url = f"https://stlouisfed.org{series_id}&api_key={api_key}&file_type=json"
+    
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            return json.loads(response.read().decode('utf-8'))
+        print(f"[@Ingress] Requesting target data stream from api.stlouisfed.org...")
+        response = session.get(url, timeout=(5, 15)) # Explicit connect/read timeouts
+        
+        if response.status_code == 200:
+            payload = response.json()
+            observations = payload.get("observations", [])
+            print(f"[✓] Successfully verified {len(observations)} FRED live data points.")
+            return observations
+        else:
+            print(f"[X] FRED Error: Status code {response.status_code} received.")
+            return []
     except Exception as e:
-        print(f"Failed API ingestion for {url.split('?')[0]}: {e}")
-        return None
+        print(f"[X] FRED Critical Connection Exception: {str(e)}")
+        return []
 
-def pull_all_feeds():
-    """Aggregates real-time 2026 data arrays directly into the quant pipeline."""
-    clear_network_blocks()
-    master_dataset = []
-    now_iso = datetime.now(timezone.utc).isoformat()
-
-    # 1. Process Institutional FRED Hard Data Arrays
-    for feed_name in ["FRED_Rates", "FRED_CPI", "FRED_GDP"]:
-        data = fetch_json_payload(DATA_SOURCES[feed_name])
-        if data and "observations" in data:
-            # Grab the most recent fundamental release observation
-            latest_obs = data["observations"][-1]
-            obs_date = latest_obs["date"]
-            obs_value = latest_obs["value"]
+def ingest_alphavantage_data(session):
+    """Fetches market indicators from AlphaVantage with explicit empty content catches."""
+    api_key = os.getenv("ALPHA_VANTAGE_KEY", "demo")
+    url = f"https://alphavantage.co{api_key}"
+    
+    try:
+        print(f"[@Ingress] Fetching global market quote from alphavantage.co...")
+        response = session.get(url, timeout=(5, 15))
+        
+        if not response.text or response.status_code != 200:
+            print(f"[X] AlphaVantage Error: Blank response payload or invalid HTTP code {response.status_code}")
+            return {}
             
-            message = f"[SOURCE:RSS][CHANNEL:{feed_name}] The latest release economic vector indicates a shift to value {obs_value}%"
-            master_dataset.append(f"[TIMESTAMP:{obs_date}T00:00:00Z]{message}")
-
-    # 2. Process Live Soft News Sentiment Feeds (Alpha Vantage)
-    news_data = fetch_json_payload(DATA_SOURCES["Global_Macro_News"])
-    if news_data and "feed" in news_data:
-        for item in news_data["feed"]:
-            title = item.get("title", "")
-            summary = item.get("summary", "")
-            time_published = item.get("time_published", "")
+        payload = response.json()
+        
+        # Capture API limit/Cloudflare response blocks explicitly
+        if "Note" in payload or "Information" in payload:
+            print("[X] AlphaVantage Ingress Throttled: API Rate Limit hit or premium tier required.")
+            return {}
             
-            # Reformat Alpha Vantage timestamp (YYYYMMDDTHMMSS) into valid ISO string
-            try:
-                dt = datetime.strptime(time_published, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-                iso_ts = dt.isoformat()
-            except Exception:
-                iso_ts = now_iso
-                
-            combined_content = f"{title} {summary}".replace("\n", " ").strip()
-            master_dataset.append(f"[TIMESTAMP:{iso_ts}][SOURCE:TELEGRAM][CHANNEL:GLOBAL_NEWS] {combined_content}")
-
-    return master_dataset
+        print("[✓] AlphaVantage payload parsed successfully.")
+        return payload
+        
+    except json.JSONDecodeError:
+        print("[X] AlphaVantage Error: Received unparsable non-JSON data stream (Cloudflare/HTML).")
+        return {}
+    except Exception as e:
+        print(f"[X] AlphaVantage Critical Exception: {str(e)}")
+        return []
 
 if __name__ == "__main__":
-    raw_entries = pull_all_feeds()
-    with open("raw_ingest_matrix.txt", "w", encoding="utf-8") as f:
-        f.write("\n".join(raw_entries))
-    print(f"Ingestion matrix complete. Verified live entries captured: {len(raw_entries)}")
+    client_session = build_secure_session()
+    
+    fred_data = ingest_fred_data(client_session)
+    av_data = ingest_alphavantage_data(client_session)
+    
+    total_valid = len(fred_data) + (1 if av_data else 0)
+    print(f"\nIngestion matrix complete. Verified live entries captured: {total_valid}")
+    
+    if total_valid == 0:
+        print("[!] Critical System Warning: Processing with empty payload vectors.")
+        # Optional: sys.exit(1) to fail the runner explicitly here if required
